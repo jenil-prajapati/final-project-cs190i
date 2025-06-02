@@ -32,7 +32,7 @@ if not st.session_state.game_state.player_name:
             initial_scenario,
             {'primary_emotion': 'neutral', 'intensity': 0.5}
         )
-        st.experimental_rerun()
+        st.rerun()
 
 # Main game interface
 if st.session_state.game_state.player_name:
@@ -57,8 +57,19 @@ if st.session_state.game_state.player_name:
             st.write(event['text'])
             st.write("---")
         
-        # Player input
-        player_input = st.text_area("What would you like to do?")
+        # Initialize session state for input counter if it doesn't exist
+        if 'input_key_counter' not in st.session_state:
+            st.session_state.input_key_counter = 0
+        
+        # Create a unique key for the text area
+        input_key = f"action_input_{st.session_state.input_key_counter}"
+        
+        # Player input with empty default value and unique key
+        player_input = st.text_area("What would you like to do?", 
+                                  value="",
+                                  key=input_key,
+                                  height=100)
+        
         col1, col2 = st.columns(2)
         
         with col1:
@@ -76,12 +87,17 @@ if st.session_state.game_state.player_name:
                     
                     # Update game state
                     st.session_state.game_state.add_story_event(response, emotion_data)
-                    st.experimental_rerun()
+                    
+                    # Increment the counter to force a new text area on next render
+                    st.session_state.input_key_counter += 1
+                    st.rerun()
         
         with col2:
             if st.button("Start Over"):
                 st.session_state.game_state = GameState()
-                st.experimental_rerun()
+                # Reset the counter to force a new text area
+                st.session_state.input_key_counter = 0
+                st.rerun()
 
 # Display emotional state (if available)
 if st.session_state.game_state.emotional_history:
@@ -89,4 +105,6 @@ if st.session_state.game_state.emotional_history:
     latest_emotion = st.session_state.game_state.emotional_history[-1]
     st.sidebar.write(f"Current emotion: {latest_emotion['primary_emotion']}")
     st.sidebar.write(f"Intensity: {latest_emotion['intensity']:.2f}")
-    st.sidebar.write(f"Confidence: {latest_emotion['confidence']:.2f}") 
+    # Only show confidence if it exists
+    if 'confidence' in latest_emotion:
+        st.sidebar.write(f"Confidence: {latest_emotion['confidence']:.2f}") 
