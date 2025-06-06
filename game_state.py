@@ -5,7 +5,6 @@ from datetime import datetime
 @dataclass
 class GameState:
     player_name: str = ""
-    current_location: str = "start"
     inventory: List[str] = field(default_factory=list)
     story_context: List[Dict] = field(default_factory=list)
     emotional_history: List[Dict] = field(default_factory=list)
@@ -13,13 +12,6 @@ class GameState:
     
     def add_story_event(self, event_text: str, emotion_data: Dict):
         """Add a new story event with associated emotional data"""
-        # Ensure emotion_data has required fields with defaults
-        emotion_data = {
-            'primary_emotion': emotion_data.get('primary_emotion', 'neutral'),
-            'intensity': emotion_data.get('intensity', 0.5),
-            'confidence': emotion_data.get('confidence', 0.5),
-        }
-        
         self.story_context.append({
             'text': event_text,
             'timestamp': datetime.now().isoformat(),
@@ -42,8 +34,7 @@ class GameState:
     
     def get_story_summary(self) -> str:
         """Get a summary of recent story events"""
-        # Keep more context (last 5 events) for better continuity
-        recent_events = self.story_context[-5:] if len(self.story_context) > 5 else self.story_context
+        recent_events = self.story_context[-3:]  # Last 3 events
         return "\n".join([event['text'] for event in recent_events])
     
     def get_emotional_context(self) -> Dict:
