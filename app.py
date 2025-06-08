@@ -46,12 +46,6 @@ if st.session_state.game_state.player_name:
     with col2:
         st.subheader("Game Stats")
         st.write(f"Player: {st.session_state.game_state.player_name}")
-        st.write(f"Difficulty: {st.session_state.game_state.difficulty_level:.2f}")
-        
-        # Display inventory
-        st.subheader("Inventory")
-        for item in st.session_state.game_state.inventory:
-            st.write(f"- {item}")
     
     with col1:
         # Display story context

@@ -15,7 +15,10 @@ class StoryEngine:
         load_dotenv()
         
         # Initialize Gemini
-        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+        api_key = os.getenv('GEMINI_API_KEY')
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY environment variable not set. Please set it to use the StoryEngine.")
+        genai.configure(api_key=api_key)
         # Use gemini-2.0-flash-lite model
         self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
         
@@ -26,13 +29,8 @@ class StoryEngine:
             "max_output_tokens": 800
         }
         
-        # API call tracking
-        self.api_calls = {
-            'count': 0,
-            'today': 0,
-            'last_reset': datetime.now().date(),
-            'history': []
-        }
+        # Minimal API call tracking
+        self.api_calls_count = 0
         
         print("Initialized StoryEngine with Gemini 2.0 Flash Lite")
         self.model_loaded = True  # Always true for cloud model
@@ -40,7 +38,6 @@ class StoryEngine:
     def _construct_prompt(self, player_input: str, emotion_data: Dict, game_state) -> str:
         """Build the prompt for story generation"""
         player_name = getattr(game_state, 'player_name', 'adventurer')
-        difficulty = getattr(game_state, 'difficulty_level', 0.5)
         emotion_label = emotion_data.get('primary_emotion', 'neutral')
         emotion_prompt = emotion_data.get('prompt_addition', '')
         
@@ -58,7 +55,6 @@ class StoryEngine:
 
         Player name: {player_name}
         Player emotion: {emotion_label}
-        Difficulty: {difficulty}
         
         {recent_context}Guidelines:
         - ALWAYS use the name {player_name} throughout the narrative
@@ -85,30 +81,14 @@ class StoryEngine:
         return random.choice(mock_responses)
 
     def _track_api_call(self, call_type):
-        """Track API call usage"""
-        today = datetime.now().date()
-        
-        # Reset daily counter if it's a new day
-        if today != self.api_calls['last_reset']:
-            self.api_calls['today'] = 0
-            self.api_calls['last_reset'] = today
-        
-        # Update counters
-        self.api_calls['count'] += 1
-        self.api_calls['today'] += 1
-        
-        # Add to history
-        self.api_calls['history'].append({
-            'timestamp': datetime.now().isoformat(),
-            'type': call_type
-        })
-        
-        # Print usage stats
-        print(f"[API USAGE] Total calls: {self.api_calls['count']}, Today: {self.api_calls['today']}")
+        """Track API call usage minimally"""
+        self.api_calls_count += 1
+        if self.api_calls_count % 10 == 0:  # Log every 10 calls
+            print(f"[API USAGE] Total calls: {self.api_calls_count}")
 
     def get_api_usage(self):
         """Get API usage statistics"""
-        return self.api_calls
+        return {'count': self.api_calls_count}
 
     def generate_story_continuation(self, player_input: str, emotion_data: Dict, game_state) -> str:
         """Generate a continuation of the story based on player input and emotional state"""
@@ -117,9 +97,7 @@ class StoryEngine:
             
         prompt = self._construct_prompt(player_input, emotion_data, game_state)
         
-        print("\n[DEBUG] Calling Gemini API for story continuation...")
-        print(f"[DEBUG] Player input: {player_input}")
-        print(f"[DEBUG] Emotion: {emotion_data.get('primary_emotion', 'neutral')}")
+        print("[DEBUG] Calling Gemini API for story continuation...")
         
         try:
             # Track API call
@@ -129,7 +107,6 @@ class StoryEngine:
                 prompt,
                 generation_config=self.generation_config
             )
-            print("[DEBUG] Successfully received response from Gemini API")
             return response.text
         except Exception as e:
             print(f"Error generating story: {e}")
@@ -150,7 +127,7 @@ class StoryEngine:
         IMPORTANT: End with at least 2 numbered choices (1, 2, 3, 4).
         """
         
-        print(f"\n[DEBUG] Calling Gemini API for initial scenario generation for {player_name}...")
+        print(f"[DEBUG] Calling Gemini API for initial scenario generation for {player_name}...")
         try:
             # Track API call
             self._track_api_call('initial_scenario')
@@ -163,8 +140,6 @@ class StoryEngine:
                     "max_output_tokens": 800
                 }
             )
-            print("[DEBUG] Successfully received initial scenario from Gemini API")
-            
             # Extract location from the response
             content = response.text
             

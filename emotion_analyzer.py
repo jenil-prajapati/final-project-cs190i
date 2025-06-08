@@ -4,10 +4,12 @@ import gc
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from dotenv import load_dotenv
 from typing import Dict
+from context_feature_extractor import ContextFeatureExtractor
 
 class EmotionAnalyzer:
     """
-    Local emotion analyzer using j-hartmann/emotion-english-distilroberta-base model
+    Context-aware emotion analyzer using j-hartmann/emotion-english-distilroberta-base model
+    with contextual adjustment for gaming scenarios
     """
     def __init__(self):
         # Load environment variables (for any future needs)
@@ -42,19 +44,39 @@ class EmotionAnalyzer:
             
             print(f"Emotion model loaded in {time.time() - start_time:.2f} seconds")
             
+            # Initialize context feature extractor if available
+            self.context_extractor = None
+            if ContextFeatureExtractor:
+                try:
+                    self.context_extractor = ContextFeatureExtractor()
+                    print("Context feature extractor initialized")
+                except Exception as e:
+                    print(f"Error initializing context extractor: {e}")
+                    self.context_extractor = None
+            
         except Exception as e:
             print(f"Error loading emotion model: {e}")
             self.model = None
+            self.context_extractor = None
 
-    def analyze_emotion(self, text: str, game_state=None) -> Dict:
+    def analyze_emotion(self, text: str, game_state=None, context_aware=True) -> Dict:
         """
-        Analyze text and return emotion data in the format expected by the app
+        Analyze text with context-awareness and return emotion data in the format expected by the app
+        
+        Parameters:
+            text (str): User input text to analyze
+            game_state: Game state object containing story context
+            context_aware (bool): Whether to use context-aware analysis
+        
         Returns:
             {
                 "primary_emotion": str, 
                 "intensity": float,
                 "confidence": float,
-                "prompt_addition": str
+                "prompt_addition": str,
+                "secondary_emotions": dict,
+                "context_applied": bool (optional),
+                "context_type": str (optional)
             }
         """
         if not self.model or not text:
@@ -62,9 +84,42 @@ class EmotionAnalyzer:
                 "primary_emotion": "neutral",
                 "intensity": 0.5,
                 "confidence": 0.7,
-                "prompt_addition": ""
+                "prompt_addition": "",
+                "secondary_emotions": {}
             }
             
+        try:
+            # Get baseline emotion using DistilRoBERTa
+            baseline_emotion = self._get_baseline_emotion(text)
+            print(f"[SENTIMENT ANALYSIS] Base Sentiment - Emotion: {baseline_emotion['primary_emotion']}, Intensity: {baseline_emotion['intensity']:.2f}, Confidence: {baseline_emotion['confidence']:.2f}")
+            
+            # If context_aware is False, no game_state, or no context extractor, return baseline
+            if not context_aware or not game_state or not self.context_extractor:
+                return baseline_emotion
+                
+            # Extract context features
+            context_features = self.context_extractor.extract_features(game_state)
+            
+            # Adjust emotion based on context
+            adjusted_emotion = self._adjust_emotion_with_context(baseline_emotion, context_features)
+            print(f"[SENTIMENT ANALYSIS] Context-Adjusted Sentiment - Emotion: {adjusted_emotion['primary_emotion']}, Intensity: {adjusted_emotion['intensity']:.2f}, Confidence: {adjusted_emotion['confidence']:.2f}, Context Type: {adjusted_emotion.get('context_type', 'N/A')}, Narrative Tone: {adjusted_emotion.get('narrative_tone', 'N/A')}")
+            
+            return adjusted_emotion
+            
+        except Exception as e:
+            print(f"Error analyzing emotion: {e}")
+            return {
+                "primary_emotion": "neutral",
+                "intensity": 0.5,
+                "confidence": 0.7,
+                "prompt_addition": "",
+                "secondary_emotions": {}
+            }
+
+    def _get_baseline_emotion(self, text: str) -> Dict:
+        """
+        Get the raw emotion analysis without context adjustment
+        """
         try:
             # Tokenize and process input
             inputs = self.tokenizer(
@@ -105,7 +160,7 @@ class EmotionAnalyzer:
             }
             
         except Exception as e:
-            print(f"Error analyzing emotion: {e}")
+            print(f"Error in baseline emotion analysis: {e}")
             return {
                 "primary_emotion": "neutral",
                 "intensity": 0.5,
@@ -114,8 +169,140 @@ class EmotionAnalyzer:
                 "secondary_emotions": {}
             }
 
+    def _adjust_emotion_with_context(self, baseline_emotion: Dict, context_features: Dict) -> Dict:
+        adjusted_emotion = baseline_emotion.copy()
+        context_type = context_features.get("context_type", "neutral")
+        narrative_tone = context_features.get("narrative_tone", "neutral")
+        context_intensity = context_features.get("intensity", 0.5)
+        context_confidence = context_features.get("context_confidence", 0.0)
+        
+        intensity_factors = {
+            "combat": {
+                "anger": 1.3,
+                "fear": 1.2,
+                "sadness": 0.8,
+                "joy": 0.6,
+                "surprise": 1.1,
+                "disgust": 1.2,
+                "neutral": 0.7,
+                "tones": {
+                    "heroic": {"anger": 1.5, "fear": 1.1, "joy": 0.8},
+                    "dark": {"anger": 1.4, "fear": 1.3, "sadness": 1.0},
+                    "mysterious": {"fear": 1.3, "surprise": 1.2}
+                }
+            },
+            "danger": {
+                "anger": 1.2,
+                "fear": 1.1,  
+                "sadness": 0.9,
+                "joy": 0.5,
+                "surprise": 1.0,
+                "disgust": 1.1,
+                "neutral": 0.6,
+                "tones": {
+                    "heroic": {"anger": 1.4, "fear": 1.0},  
+                    "dark": {"fear": 1.3, "anger": 1.3},
+                    "tense": {"fear": 1.3, "surprise": 1.1}
+                }
+            },
+            "puzzle": {
+                "anger": 0.7,
+                "fear": 0.8,
+                "sadness": 0.7,
+                "joy": 0.9,
+                "surprise": 1.2,
+                "disgust": 0.6,
+                "neutral": 0.8,
+                "tones": {
+                    "mysterious": {"surprise": 1.3, "fear": 0.9},
+                    "intriguing": {"joy": 1.0, "surprise": 1.1}
+                }
+            },
+            "magical": {
+                "anger": 0.6,
+                "fear": 0.8,
+                "sadness": 0.8,
+                "joy": 1.2,
+                "surprise": 1.3,
+                "disgust": 0.7,
+                "neutral": 0.9,
+                "tones": {
+                    "wonderous": {"joy": 1.4, "surprise": 1.4},
+                    "surprising": {"surprise": 1.5, "joy": 1.1},
+                    "dark": {"fear": 1.0, "sadness": 1.0}
+                }
+            },
+            "social": {
+                "anger": 0.9,
+                "fear": 0.7,
+                "sadness": 1.0,
+                "joy": 1.1,
+                "surprise": 0.9,
+                "disgust": 0.9,
+                "neutral": 0.8,
+                "tones": {
+                    "friendly": {"joy": 1.3},
+                    "tense": {"anger": 1.1, "fear": 0.9},
+                    "emotional": {"sadness": 1.2, "joy": 1.2}
+                }
+            },
+            "discovery": {
+                "anger": 0.6,
+                "fear": 0.7,
+                "sadness": 0.7,
+                "joy": 1.2,
+                "surprise": 1.1,
+                "disgust": 0.6,
+                "neutral": 0.8,
+                "tones": {
+                    "heroic": {"joy": 1.3},
+                    "mysterious": {"surprise": 1.2},
+                    "intriguing": {"joy": 1.1, "surprise": 1.0}
+                }
+            },
+            "neutral": {
+                "anger": 0.8,
+                "fear": 0.8,
+                "sadness": 0.8,
+                "joy": 0.9,
+                "surprise": 0.9,
+                "disgust": 0.8,
+                "neutral": 1.0,
+                "tones": {}
+            }
+        }
+        
+        primary_emotion = adjusted_emotion["primary_emotion"]
+        base_intensity = adjusted_emotion["intensity"]
+        base_confidence = adjusted_emotion["confidence"]
+        
+        adjustment_factor = intensity_factors.get(context_type, intensity_factors["neutral"]).get(primary_emotion, 0.8)
+        
+        tone_adjustments = intensity_factors.get(context_type, {}).get("tones", {}).get(narrative_tone, {}).get(primary_emotion)
+        if tone_adjustments is not None:
+            adjustment_factor = tone_adjustments
+        
+        adjusted_intensity = base_intensity * adjustment_factor
+        blended_intensity = (adjusted_intensity * 0.6) + (context_intensity * 0.4)
+        adjusted_emotion["intensity"] = max(0.1, min(1.0, blended_intensity))
+        
+        adjusted_confidence = (base_confidence * 0.7) + (context_confidence * 0.3)
+        adjusted_emotion["confidence"] = max(0.1, min(1.0, adjusted_confidence))
+        
+        adjusted_emotion["context_type"] = context_type
+        adjusted_emotion["narrative_tone"] = narrative_tone
+        
+        return adjusted_emotion
+
     def get_emotion_prompt_addition(self, emotion_data: Dict) -> str:
         """Generate a natural language description of the emotion for prompts"""
         if not emotion_data or emotion_data.get("primary_emotion") == "neutral":
             return ""
-        return f"They feel {emotion_data['primary_emotion']}."
+        
+        base_text = f"They feel {emotion_data['primary_emotion']}."
+        
+        if emotion_data.get("context_applied", False):
+            if 'prompt_addition' in emotion_data and emotion_data['prompt_addition']:
+                return emotion_data['prompt_addition']
+        
+        return base_text
