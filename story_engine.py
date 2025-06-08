@@ -118,7 +118,6 @@ class StoryEngine:
         prompt = self._construct_prompt(player_input, emotion_data, game_state)
         
         print("\n[DEBUG] Calling Gemini API for story continuation...")
-        print(f"[DEBUG] Player input: {player_input}")
         print(f"[DEBUG] Emotion: {emotion_data.get('primary_emotion', 'neutral')}")
         
         try:

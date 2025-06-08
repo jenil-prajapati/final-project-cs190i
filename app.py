@@ -12,6 +12,10 @@ if 'emotion_analyzer' not in st.session_state:
     st.session_state.emotion_analyzer = EmotionAnalyzer()
 if 'player_input' not in st.session_state:
     st.session_state.player_input = ''
+if 'context_aware_emotions' not in st.session_state:
+    st.session_state.context_aware_emotions = True
+if 'use_summarizer' not in st.session_state:
+    st.session_state.use_summarizer = True
 
 # Page config
 st.set_page_config(page_title="Emotion-Aware Interactive Storytelling", layout="wide")
@@ -43,15 +47,25 @@ if st.session_state.game_state.player_name:
     # Display game state
     col1, col2 = st.columns([2, 1])
     
-    with col2:
-        st.subheader("Game Stats")
+    with st.sidebar:
+        st.subheader("Game Information")
         st.write(f"Player: {st.session_state.game_state.player_name}")
-        st.write(f"Difficulty: {st.session_state.game_state.difficulty_level:.2f}")
+        st.write(f"Difficulty: {st.session_state.game_state.difficulty_level:.1f}/1.0")
         
-        # Display inventory
         st.subheader("Inventory")
         for item in st.session_state.game_state.inventory:
             st.write(f"- {item}")
+            
+        # Emotion Analysis Settings
+        st.subheader("Emotion Analysis Settings")
+        st.session_state.context_aware_emotions = st.checkbox("Use context-aware emotions", 
+                                                           value=st.session_state.context_aware_emotions,
+                                                           help="Include story context when analyzing emotions")
+        
+        if st.session_state.context_aware_emotions:
+            st.session_state.use_summarizer = st.checkbox("Use summarizer for context", 
+                                                        value=st.session_state.use_summarizer,
+                                                        help="Use a summarizer model to balance story context and user input")
     
     with col1:
         # Display story context
@@ -71,7 +85,8 @@ if st.session_state.game_state.player_name:
                     # Analyze emotion with context awareness
                     emotion_data = st.session_state.emotion_analyzer.analyze_emotion(
                         player_input, 
-                        st.session_state.game_state
+                        st.session_state.game_state,
+                        context_aware=st.session_state.context_aware_emotions
                     )
                     
                     # Generate story continuation

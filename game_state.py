@@ -32,10 +32,29 @@ class GameState:
         elif emotion_data['primary_emotion'] in ['fearful', 'uncertain']:
             self.difficulty_level = max(0.0, self.difficulty_level - 0.1)
     
-    def get_story_summary(self) -> str:
-        """Get a summary of recent story events"""
-        recent_events = self.story_context[-3:]  # Last 3 events
-        return "\n".join([event['text'] for event in recent_events])
+    def get_story_summary(self, format_type='default') -> str:
+        """
+        Get a summary of story events
+        format_type: 
+            - 'default': Last 3 events (original behavior)
+            - 'sentiment': Formatted specifically for sentiment analysis
+            - 'full': All events
+        """
+        if not self.story_context:
+            return ""
+            
+        if format_type == 'full':
+            return "\n".join([event['text'] for event in self.story_context])
+            
+        elif format_type == 'sentiment':
+            recent_count = min(3, len(self.story_context))
+            recent_events = self.story_context[-recent_count:]
+            
+            return "\n".join([event['text'] for event in recent_events])
+            
+        else:
+            recent_events = self.story_context[-3:] if len(self.story_context) >= 3 else self.story_context
+            return "\n".join([event['text'] for event in recent_events])
     
     def get_emotional_context(self) -> Dict:
         """Get the current emotional context for story generation"""
