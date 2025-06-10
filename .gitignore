@@ -15,6 +15,20 @@ ENV/
 .vscode/
 .idea/
 
-# OS
+# Test files
+test_*.py
+*_test.py
+test_app.py
+test_emotions.py
+test_sequence.py
+
+# Visualization and metrics
+presentation_metrics.py
+sentiment_stats.py
+*_results.json
+emotion_*.json
+sentiment_*.json
+
+# Misc
 .DS_Store
 Thumbs.db 

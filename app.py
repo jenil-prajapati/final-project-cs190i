@@ -6,10 +6,17 @@ from game_state import GameState
 # Initialize session state
 if 'game_state' not in st.session_state:
     st.session_state.game_state = GameState()
+    # Set initial context for the horror story
+    st.session_state.game_state.context_type = "danger"
+    st.session_state.game_state.narrative_tone = "dark"
+    st.session_state.game_state.context_intensity = 0.9
+
 if 'story_engine' not in st.session_state:
     st.session_state.story_engine = StoryEngine()
 if 'emotion_analyzer' not in st.session_state:
     st.session_state.emotion_analyzer = EmotionAnalyzer()
+if 'player_input' not in st.session_state:
+    st.session_state.player_input = ''
 
 # Page config
 st.set_page_config(page_title="Emotion-Aware Interactive Storytelling", layout="wide")
@@ -26,8 +33,10 @@ if not st.session_state.game_state.player_name:
     player_name = st.text_input("Enter your character's name:")
     if player_name:
         st.session_state.game_state.player_name = player_name
-        # Generate initial scenario
-        initial_scenario = st.session_state.story_engine.generate_initial_scenario()
+        # Generate initial scenario with player name
+        initial_scenario = st.session_state.story_engine.generate_initial_scenario(player_name)
+                
+        # Add the story event
         st.session_state.game_state.add_story_event(
             initial_scenario,
             {'primary_emotion': 'neutral', 'intensity': 0.5}
@@ -42,41 +51,27 @@ if st.session_state.game_state.player_name:
     with col2:
         st.subheader("Game Stats")
         st.write(f"Player: {st.session_state.game_state.player_name}")
-        st.write(f"Location: {st.session_state.game_state.current_location}")
-        st.write(f"Difficulty: {st.session_state.game_state.difficulty_level:.2f}")
-        
-        # Display inventory
-        st.subheader("Inventory")
-        for item in st.session_state.game_state.inventory:
-            st.write(f"- {item}")
     
     with col1:
         # Display story context
         st.subheader("Story")
-        for event in st.session_state.game_state.story_context:
+        for event in st.session_state.game_state.story_events:
             st.write(event['text'])
             st.write("---")
         
-        # Initialize session state for input counter if it doesn't exist
-        if 'input_key_counter' not in st.session_state:
-            st.session_state.input_key_counter = 0
-        
-        # Create a unique key for the text area
-        input_key = f"action_input_{st.session_state.input_key_counter}"
-        
-        # Player input with empty default value and unique key
-        player_input = st.text_area("What would you like to do?", 
-                                  value="",
-                                  key=input_key,
-                                  height=100)
-        
+        # Player input
+        player_input = st.text_area("What would you like to do?", value=st.session_state.player_input)
         col1, col2 = st.columns(2)
         
         with col1:
             if st.button("Submit Action"):
                 if player_input:
-                    # Analyze emotion
-                    emotion_data = st.session_state.emotion_analyzer.analyze_emotion(player_input)
+                    st.session_state.player_input = ''  # Clear the input field
+                    # Analyze emotion with context awareness
+                    emotion_data = st.session_state.emotion_analyzer.analyze_emotion(
+                        player_input, 
+                        st.session_state.game_state
+                    )
                     
                     # Generate story continuation
                     response = st.session_state.story_engine.generate_story_continuation(
@@ -87,24 +82,26 @@ if st.session_state.game_state.player_name:
                     
                     # Update game state
                     st.session_state.game_state.add_story_event(response, emotion_data)
-                    
-                    # Increment the counter to force a new text area on next render
-                    st.session_state.input_key_counter += 1
                     st.rerun()
         
         with col2:
             if st.button("Start Over"):
                 st.session_state.game_state = GameState()
-                # Reset the counter to force a new text area
-                st.session_state.input_key_counter = 0
                 st.rerun()
 
 # Display emotional state (if available)
-if st.session_state.game_state.emotional_history:
+if st.session_state.game_state.story_events:
     st.sidebar.subheader("Your Emotional Journey")
-    latest_emotion = st.session_state.game_state.emotional_history[-1]
-    st.sidebar.write(f"Current emotion: {latest_emotion['primary_emotion']}")
-    st.sidebar.write(f"Intensity: {latest_emotion['intensity']:.2f}")
-    # Only show confidence if it exists
+    latest_emotion = st.session_state.game_state.story_events[-1]['emotion']
+    st.sidebar.write(f"Current emotion: {latest_emotion.get('primary_emotion', latest_emotion.get('emotion', 'neutral'))}")
+    st.sidebar.write(f"Intensity: {latest_emotion.get('intensity', 0.5):.2f}")
+    
+    # Safely display confidence if it exists
     if 'confidence' in latest_emotion:
-        st.sidebar.write(f"Confidence: {latest_emotion['confidence']:.2f}") 
+        st.sidebar.write(f"Confidence: {latest_emotion['confidence']:.2f}")
+    
+    # Display secondary emotions if available
+    if 'secondary_emotions' in latest_emotion and latest_emotion['secondary_emotions']:
+        st.sidebar.subheader("Secondary Emotions")
+        for emotion, score in latest_emotion['secondary_emotions'].items():
+            st.sidebar.write(f"{emotion}: {score:.2f}")

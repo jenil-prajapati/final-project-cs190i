@@ -2,52 +2,83 @@ from dataclasses import dataclass, field
 from typing import List, Dict
 from datetime import datetime
 
-@dataclass
 class GameState:
-    player_name: str = ""
-    current_location: str = "start"
-    inventory: List[str] = field(default_factory=list)
-    story_context: List[Dict] = field(default_factory=list)
-    emotional_history: List[Dict] = field(default_factory=list)
-    difficulty_level: float = 0.5  # 0.0 to 1.0
-    
-    def add_story_event(self, event_text: str, emotion_data: Dict):
-        """Add a new story event with associated emotional data"""
-        # Ensure emotion_data has required fields with defaults
-        emotion_data = {
-            'primary_emotion': emotion_data.get('primary_emotion', 'neutral'),
-            'intensity': emotion_data.get('intensity', 0.5),
-            'confidence': emotion_data.get('confidence', 0.5),
+    def __init__(self):
+        self.player_name = ""
+        self.context_type = "neutral"
+        self.narrative_tone = "neutral"
+        self.context_intensity = 0.5
+        self.current_description = ""
+        self.story_events = []
+        self.emotional_state = {
+            "current_emotion": "neutral",
+            "intensity": 0.5,
+            "confidence": 0.5
         }
+    
+    @property
+    def player_name(self):
+        return self._player_name
+
+    @player_name.setter
+    def player_name(self, value):
+        self._player_name = value
+
+    @property
+    def context_type(self):
+        return self._context_type
+
+    @context_type.setter
+    def context_type(self, value):
+        self._context_type = value
+
+    @property
+    def narrative_tone(self):
+        return self._narrative_tone
+
+    @narrative_tone.setter
+    def narrative_tone(self, value):
+        self._narrative_tone = value
+
+    @property
+    def context_intensity(self):
+        return self._context_intensity
+
+    @context_intensity.setter
+    def context_intensity(self, value):
+        self._context_intensity = float(value)
+
+    @property
+    def current_description(self):
+        return self._current_description
+
+    @current_description.setter
+    def current_description(self, value):
+        self._current_description = value
+
+    def add_story_event(self, event_text, emotion_data=None):
+        if emotion_data is None:
+            emotion_data = {
+                "emotion": "neutral",
+                "intensity": 0.5,
+                "confidence": 0.5
+            }
         
-        self.story_context.append({
-            'text': event_text,
-            'timestamp': datetime.now().isoformat(),
-            'emotion': emotion_data['primary_emotion'],
-            'intensity': emotion_data['intensity']
+        self.story_events.append({
+            "text": event_text,
+            "emotion": emotion_data
         })
-        self.emotional_history.append(emotion_data)
-        
-        # Adjust difficulty based on emotional state
-        self._adjust_difficulty(emotion_data)
-    
-    def _adjust_difficulty(self, emotion_data: Dict):
-        """Dynamically adjust difficulty based on player's emotional state"""
-        # Increase difficulty if player is confident/happy
-        if emotion_data['primary_emotion'] in ['confident', 'happy']:
-            self.difficulty_level = min(1.0, self.difficulty_level + 0.1)
-        # Decrease difficulty if player is fearful/uncertain
-        elif emotion_data['primary_emotion'] in ['fearful', 'uncertain']:
-            self.difficulty_level = max(0.0, self.difficulty_level - 0.1)
-    
+
+    def update_emotional_state(self, emotion_data):
+        self.emotional_state = emotion_data
+
     def get_story_summary(self) -> str:
         """Get a summary of recent story events"""
-        # Keep more context (last 5 events) for better continuity
-        recent_events = self.story_context[-5:] if len(self.story_context) > 5 else self.story_context
+        recent_events = self.story_events[-3:]  # Last 3 events
         return "\n".join([event['text'] for event in recent_events])
     
     def get_emotional_context(self) -> Dict:
         """Get the current emotional context for story generation"""
-        if not self.emotional_history:
+        if not self.story_events:
             return {'primary_emotion': 'neutral', 'intensity': 0.5}
-        return self.emotional_history[-1] 
+        return self.story_events[-1]['emotion']
