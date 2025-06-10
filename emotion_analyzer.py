@@ -176,6 +176,57 @@ class EmotionAnalyzer:
         context_intensity = context_features.get("intensity", 0.5)
         context_confidence = context_features.get("context_confidence", 0.0)
         
+        # Emotion transformation rules based on context and tone
+        emotion_transforms = {
+            "danger": {
+                "joy": {
+                    "negative": "fear",     # Joy in danger + negative tone -> fear
+                    "tense": "fear",        # Joy in danger + tense -> fear
+                    "dark": "fear",         # Joy in danger + dark -> fear
+                    "default": "surprise"    # Default transformation for joy in danger
+                },
+                "neutral": {
+                    "negative": "fear",
+                    "tense": "fear",
+                    "dark": "fear",
+                    "default": "fear"
+                },
+                "surprise": {
+                    "negative": "fear",
+                    "tense": "fear",
+                    "dark": "fear",
+                    "default": "fear"
+                }
+            },
+            "combat": {
+                "joy": {
+                    "negative": "anger",
+                    "tense": "fear",
+                    "dark": "fear",
+                    "default": "anger"
+                },
+                "neutral": {
+                    "negative": "fear",
+                    "tense": "fear",
+                    "dark": "fear",
+                    "default": "anger"
+                }
+            }
+        }
+        
+        # Get the base emotion and its transformation rules
+        primary_emotion = adjusted_emotion["primary_emotion"]
+        base_intensity = adjusted_emotion["intensity"]
+        base_confidence = adjusted_emotion["confidence"]
+        
+        # Transform emotion based on context and tone if applicable
+        if context_type in emotion_transforms and primary_emotion in emotion_transforms[context_type]:
+            transform_rules = emotion_transforms[context_type][primary_emotion]
+            # Apply specific tone transformation or default
+            new_emotion = transform_rules.get(narrative_tone, transform_rules.get("default", primary_emotion))
+            adjusted_emotion["primary_emotion"] = new_emotion
+        
+        # Intensity adjustment factors
         intensity_factors = {
             "combat": {
                 "anger": 1.3,
@@ -193,7 +244,7 @@ class EmotionAnalyzer:
             },
             "danger": {
                 "anger": 1.2,
-                "fear": 1.1,  
+                "fear": 1.3,  # Increased fear intensity in danger
                 "sadness": 0.9,
                 "joy": 0.5,
                 "surprise": 1.0,
@@ -201,96 +252,41 @@ class EmotionAnalyzer:
                 "neutral": 0.6,
                 "tones": {
                     "heroic": {"anger": 1.4, "fear": 1.0},  
-                    "dark": {"fear": 1.3, "anger": 1.3},
-                    "tense": {"fear": 1.3, "surprise": 1.1}
+                    "dark": {"fear": 1.4, "anger": 1.3},    # Increased fear in dark tone
+                    "tense": {"fear": 1.4, "surprise": 1.1}, # Increased fear in tense tone
+                    "negative": {"fear": 1.4, "anger": 1.2}  # Added negative tone adjustments
                 }
-            },
-            "puzzle": {
-                "anger": 0.7,
-                "fear": 0.8,
-                "sadness": 0.7,
-                "joy": 0.9,
-                "surprise": 1.2,
-                "disgust": 0.6,
-                "neutral": 0.8,
-                "tones": {
-                    "mysterious": {"surprise": 1.3, "fear": 0.9},
-                    "intriguing": {"joy": 1.0, "surprise": 1.1}
-                }
-            },
-            "magical": {
-                "anger": 0.6,
-                "fear": 0.8,
-                "sadness": 0.8,
-                "joy": 1.2,
-                "surprise": 1.3,
-                "disgust": 0.7,
-                "neutral": 0.9,
-                "tones": {
-                    "wonderous": {"joy": 1.4, "surprise": 1.4},
-                    "surprising": {"surprise": 1.5, "joy": 1.1},
-                    "dark": {"fear": 1.0, "sadness": 1.0}
-                }
-            },
-            "social": {
-                "anger": 0.9,
-                "fear": 0.7,
-                "sadness": 1.0,
-                "joy": 1.1,
-                "surprise": 0.9,
-                "disgust": 0.9,
-                "neutral": 0.8,
-                "tones": {
-                    "friendly": {"joy": 1.3},
-                    "tense": {"anger": 1.1, "fear": 0.9},
-                    "emotional": {"sadness": 1.2, "joy": 1.2}
-                }
-            },
-            "discovery": {
-                "anger": 0.6,
-                "fear": 0.7,
-                "sadness": 0.7,
-                "joy": 1.2,
-                "surprise": 1.1,
-                "disgust": 0.6,
-                "neutral": 0.8,
-                "tones": {
-                    "heroic": {"joy": 1.3},
-                    "mysterious": {"surprise": 1.2},
-                    "intriguing": {"joy": 1.1, "surprise": 1.0}
-                }
-            },
-            "neutral": {
-                "anger": 0.8,
-                "fear": 0.8,
-                "sadness": 0.8,
-                "joy": 0.9,
-                "surprise": 0.9,
-                "disgust": 0.8,
-                "neutral": 1.0,
-                "tones": {}
             }
         }
         
-        primary_emotion = adjusted_emotion["primary_emotion"]
-        base_intensity = adjusted_emotion["intensity"]
-        base_confidence = adjusted_emotion["confidence"]
+        # Get the adjustment factor for the current emotion (after transformation)
+        current_emotion = adjusted_emotion["primary_emotion"]
+        adjustment_factor = intensity_factors.get(context_type, {}).get(current_emotion, 0.8)
         
-        adjustment_factor = intensity_factors.get(context_type, intensity_factors["neutral"]).get(primary_emotion, 0.8)
-        
-        tone_adjustments = intensity_factors.get(context_type, {}).get("tones", {}).get(narrative_tone, {}).get(primary_emotion)
+        # Apply tone-specific adjustments if available
+        tone_adjustments = intensity_factors.get(context_type, {}).get("tones", {}).get(narrative_tone, {}).get(current_emotion)
         if tone_adjustments is not None:
             adjustment_factor = tone_adjustments
         
+        # Calculate adjusted intensity
         adjusted_intensity = base_intensity * adjustment_factor
         blended_intensity = (adjusted_intensity * 0.6) + (context_intensity * 0.4)
         adjusted_emotion["intensity"] = max(0.1, min(1.0, blended_intensity))
         
-        adjusted_confidence = (base_confidence * 0.7) + (context_confidence * 0.3)
-        adjusted_emotion["confidence"] = max(0.1, min(1.0, adjusted_confidence))
+        # Adjust confidence based on transformation
+        if adjusted_emotion["primary_emotion"] != primary_emotion:
+            # Lower confidence when emotion is transformed
+            adjusted_confidence = (base_confidence * 0.6) + (context_confidence * 0.4)
+        else:
+            adjusted_confidence = (base_confidence * 0.7) + (context_confidence * 0.3)
         
+        adjusted_emotion["confidence"] = max(0.1, min(1.0, adjusted_confidence))
         adjusted_emotion["context_type"] = context_type
         adjusted_emotion["narrative_tone"] = narrative_tone
+        
+        # Add explanation of transformation
+        if adjusted_emotion["primary_emotion"] != primary_emotion:
+            adjusted_emotion["transformation_explanation"] = f"Emotion transformed from {primary_emotion} to {adjusted_emotion['primary_emotion']} due to {context_type} context and {narrative_tone} tone"
         
         return adjusted_emotion
 

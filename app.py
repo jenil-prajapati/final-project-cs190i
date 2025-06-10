@@ -6,6 +6,11 @@ from game_state import GameState
 # Initialize session state
 if 'game_state' not in st.session_state:
     st.session_state.game_state = GameState()
+    # Set initial context for the horror story
+    st.session_state.game_state.context_type = "danger"
+    st.session_state.game_state.narrative_tone = "dark"
+    st.session_state.game_state.context_intensity = 0.9
+
 if 'story_engine' not in st.session_state:
     st.session_state.story_engine = StoryEngine()
 if 'emotion_analyzer' not in st.session_state:
@@ -50,7 +55,7 @@ if st.session_state.game_state.player_name:
     with col1:
         # Display story context
         st.subheader("Story")
-        for event in st.session_state.game_state.story_context:
+        for event in st.session_state.game_state.story_events:
             st.write(event['text'])
             st.write("---")
         
@@ -85,11 +90,11 @@ if st.session_state.game_state.player_name:
                 st.rerun()
 
 # Display emotional state (if available)
-if st.session_state.game_state.emotional_history:
+if st.session_state.game_state.story_events:
     st.sidebar.subheader("Your Emotional Journey")
-    latest_emotion = st.session_state.game_state.emotional_history[-1]
-    st.sidebar.write(f"Current emotion: {latest_emotion['primary_emotion']}")
-    st.sidebar.write(f"Intensity: {latest_emotion['intensity']:.2f}")
+    latest_emotion = st.session_state.game_state.story_events[-1]['emotion']
+    st.sidebar.write(f"Current emotion: {latest_emotion.get('primary_emotion', latest_emotion.get('emotion', 'neutral'))}")
+    st.sidebar.write(f"Intensity: {latest_emotion.get('intensity', 0.5):.2f}")
     
     # Safely display confidence if it exists
     if 'confidence' in latest_emotion:

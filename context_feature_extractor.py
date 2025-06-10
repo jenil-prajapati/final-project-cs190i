@@ -227,119 +227,34 @@ class ContextFeatureExtractor:
         return [word for word, _ in sorted_words[:top_k]]
     
     def extract_features(self, game_state) -> Dict:
-        """
-        Extract contextual features from the game state using ML
-        
-        Args:
-            game_state: Game state object with story_context and emotional_history
-            
-        Returns:
-            Dict containing extracted context features
-        """
-        # Default features when model loading fails or no context available
-        default_features = {
-            "context_type": "neutral",
-            "narrative_tone": "neutral",
-            "intensity": 0.5,
-            "recent_emotions": [],
-            "semantic_keywords": [],
-            "context_confidence": 0.0,
-            "embedding": None
-        }
-        
-        # Check if model loaded correctly
-        if not self.model_loaded:
-            return default_features
-        
-        # Check if game state has the necessary attributes
-        if not hasattr(game_state, 'story_context') or not game_state.story_context:
-            return default_features
+        """Extract context features from the game state"""
+        if not self.model_loaded or not game_state:
+            return {
+                "context_type": "neutral",
+                "narrative_tone": "neutral",
+                "intensity": 0.5,
+                "context_confidence": 0.5
+            }
         
         try:
-            # Extract recent events (last 3 max for relevance)
-            recent_events = game_state.story_context[-3:]
+            # Get context type and narrative tone directly from game state
+            context_type = getattr(game_state, 'context_type', 'neutral')
+            narrative_tone = getattr(game_state, 'narrative_tone', 'neutral')
+            context_intensity = getattr(game_state, 'context_intensity', 0.5)
             
-            # Extract text from recent events
-            event_texts = [event.get('text', '') for event in recent_events if 'text' in event]
-            if not event_texts:
-                return default_features
-                
-            # Combine text for analysis with separators to maintain event boundaries
-            combined_text = " → ".join(event_texts)
-            
-            # Get embedding for the combined text
-            text_embedding = self._get_embedding(combined_text)
-            
-            # Find closest context type and narrative tone
-            context_type, context_similarity = self._get_closest_prototype(text_embedding, self.context_embeddings)
-            narrative_tone, tone_similarity = self._get_closest_prototype(text_embedding, self.tone_embeddings)
-            
-            # Extract semantic keywords
-            semantic_keywords = self._extract_semantic_keywords(combined_text)
-            
-            # Extract recent emotions if available
-            recent_emotions = []
-            if hasattr(game_state, 'emotional_history') and game_state.emotional_history:
-                recent_emotions = [
-                    emotion.get('primary_emotion', 'neutral') 
-                    for emotion in game_state.emotional_history[-3:]
-                ]
-            
-            # Calculate context intensity based on semantic similarity scores
-            # Higher similarity means more confident/intense classification
-            base_intensity = 0.5
-            similarity_boost = (context_similarity + tone_similarity) / 2 * 0.5  # Scale to 0-0.5 range
-            
-            # Adjust intensity based on recent emotions if available
-            emotion_intensity = 0.0
-            if hasattr(game_state, 'emotional_history') and game_state.emotional_history:
-                # Get intensities of recent emotions
-                intensities = [
-                    emotion.get('intensity', 0.5) 
-                    for emotion in game_state.emotional_history[-3:]
-                ]
-                if intensities:
-                    emotion_intensity = sum(intensities) / len(intensities)
-            
-            # Blend different intensity sources
-            intensity = base_intensity + similarity_boost
-            if emotion_intensity > 0:
-                intensity = (intensity + emotion_intensity) / 2
-                
-            # Ensure within valid range
-            intensity = max(0.1, min(1.0, intensity))
-            
-            # Calculate confidence based on similarity scores
-            confidence = (context_similarity + tone_similarity) / 2
-            
-            # Boost confidence for danger and combat if threat-related keywords are present
-            threat_keywords = ['threat', 'enemy', 'defend', 'attack', 'danger', 'fight', 'confront', 'battle', 'predator', 'menace', 'violence', 'fear']
-            if any(kw in combined_text.lower() for kw in threat_keywords):
-                if context_type in ['danger', 'combat']:
-                    confidence = min(1.0, confidence + 0.2)  # Boost confidence
-                elif context_type not in ['danger', 'combat'] and confidence < 0.7:
-                    # Recheck with a bias towards danger or combat if confidence is not high
-                    similarities = {}
-                    for category, proto_embeddings in self.context_embeddings.items():
-                        similarity = torch.nn.functional.cosine_similarity(
-                            text_embedding.unsqueeze(0), proto_embeddings
-                        ).mean().item()
-                        if category in ['danger', 'combat']:
-                            similarity += 0.1  # Small bias towards threat contexts
-                        similarities[category] = similarity
-                    context_type = max(similarities, key=similarities.get)
-                    confidence = similarities[context_type]
-            
+            # Return the features
             return {
                 "context_type": context_type,
                 "narrative_tone": narrative_tone,
-                "intensity": intensity,
-                "recent_emotions": recent_emotions,
-                "semantic_keywords": semantic_keywords,
-                "context_confidence": confidence,
-                "embedding": text_embedding  # Store embedding for potential future use
+                "intensity": context_intensity,
+                "context_confidence": 0.8  # High confidence since we're using explicit context
             }
             
         except Exception as e:
             print(f"Error extracting context features: {e}")
-            return default_features
+            return {
+                "context_type": "neutral",
+                "narrative_tone": "neutral",
+                "intensity": 0.5,
+                "context_confidence": 0.5
+            }
